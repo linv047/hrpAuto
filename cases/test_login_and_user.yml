@@ -1,0 +1,72 @@
+config:
+#  base_url: https://staging.freightapp.com
+  name: TMS user 相关
+  variables:
+    username: ${env.USERNAME}
+    password: ${env.PASSWORD}
+
+    UserID: ${env.USER_ID}
+    UserToken: ${env.USER_TOKEN}
+
+#test_check_login.php:
+#  name: check login
+#  request:
+#    method: POST
+#    url: /write/check_login.php
+#    data:
+#      username: ${username}
+#      password: ${password}
+#  extract:
+#    UserID: body.UserID
+#    UserToken: body.UserToken
+#  validate:
+#  - eq: [status_code, 200]
+#  - eq: [$.UserID, '${UserID}']
+#  - eq: [$.UserFirstLast, victorlin]
+#
+#
+test_check_user:
+
+  -
+    name: check user
+    request:
+      method: POST
+      url: /write/check_user.php
+      data:
+        UserID: ${UserID}
+        UserToken: ${UserToken}
+    validate:
+    - eq: [status_code, 200]
+    - str_eq: [body.user_id, '${UserID}']
+
+  -
+    name: get driver company
+    request:
+      method: POST
+      url: /write/get_driver_company.php
+      data:
+        UserID: ${UserID}
+        UserToken: ${UserToken}
+    validate:
+      - eq: [status_code, 200 ]
+      - contains: [text ,'CoFreight']
+
+
+test_get_driver:
+  name: get driver
+  request:
+    method: POST
+    url: /write/get_drivers_tms_dispatch_v3.php
+    data:
+      UserID: ${UserID}
+      UserToken: ${UserToken}
+      input_dispatch_start_date: ${get_now_date()}
+      input_driver_company_id: 69
+  validate:
+    - eq: [ status_code, 200 ]
+
+
+
+
+
+

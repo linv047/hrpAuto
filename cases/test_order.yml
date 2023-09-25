@@ -1,0 +1,475 @@
+config:
+
+  name: TMS user 相关
+  variables:
+
+    UserID: ${env.USER_ID}
+    UserToken: ${env.USER_TOKEN}
+    Pro_id: '1001122710'
+    Order_id: '6013447'
+    PU_id: '5573891'
+
+
+
+
+test_create_order:
+  name: simple create order 创建Order，获取order_id
+  request:
+    method: POST
+    url: https://staging.freightapp.com:8773/simple/order
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      UserID: ${UserID}
+      UserToken: ${UserToken}
+  extract:
+    Order_id: '<p>Order Id (.*?)</p>'
+    PU_id: 'PU Id (.*?)</a>'
+    Pro_id: '<p>Pro (.*?)</p>'
+  validate:
+    - eq: [ status_code, 200 ]
+    - len_eq: [ '<p>Order Id (.*?)</p>', 7 ]
+    - len_eq: [ 'PU Id (.*?)</a>', 7 ]
+    - len_eq: [ '<p>Pro (.*?)</p>', 10 ]
+
+test_check_order:
+  name: check order, 检查order_status
+  request:
+    method: POST
+    url: /write/get_load_tms_orderv2.php
+    verify: False
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      input_order_id: ${str(Order_id)}
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  validate:
+  - eq: [status_code, 200]
+  - eq: ['$.order.order_table[0].tms_order_status', '1']
+
+test_create_pick_up_trip:
+  name: create pick up trip
+  request:
+    method: POST
+    url: /write/write_tms_dispatch7.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      input_driver_id: '5941'
+      input_dispatch_start_date: '2023-09-25'
+      input_carrier_id: '0'
+      selected_carrier_id: '0'
+      input_carrier_driver_id: '0'
+      is_carrier_driver_id: '0'
+      input_carrier_driver_parent_carrier_id: '0'
+      input_warehouse_id: '347975'
+      input_warehouse_id2: '0'
+      input_lock_sequence: ' 1'
+      input_dispatch_end_trip: '0'
+      input_dispatch_type: '0'
+      input_dispatch_service_level: None
+      dispatch_lines: '[{"input_id":"${PU_id}","input_id2":"${PU_id}","stage":"0","task_id":"0","rv_order":"0","rv_import":"0","lat":"0.000000","lng":"0.000000"}]'
+      input_dispatch_id: '0'
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  extract:
+    DispatchID: $.dispatch_id
+  validate:
+    - eq: [ status_code, 200 ]
+    - eq: [ length(body.stops), 1 ]
+
+test_order_status2:
+  name: check order_status
+  request:
+    method: POST
+    url: /write/get_load_tms_orderv2.php
+    verify: False
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      input_order_id: ${str(Order_id)}
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  validate:
+  - eq: [status_code, 200]
+  - eq: ['$.order.order_table[0].tms_order_status', '2']
+
+test_pickup_trip_get_task:
+
+  request:
+    method: POST
+    url: /write/get_dispatch_tms.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      dispatch_id: ${DispatchID}
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  extract:
+    pickup_task_group_id: '$.tasks[0].task_group_id'
+  validate:
+  - eq: [status_code, 200]
+  - eq: ['$.tms_dispatch_id', '${DispatchID}']
+
+test_check_in_task:
+
+  name: check in task
+  request:
+    method: POST
+    url: /write/write_tms_check_in_task_group_v4.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      task_group_id: ${pickup_task_group_id}
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  validate:
+    - eq: [ status_code, 200 ]
+    - eq: [ body, 1 ]
+
+test_complete_trip:
+  name: complete trip
+  request:
+    method: POST
+    url: /write/write_tms_dispatch_complete.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      dispatch_id: ${DispatchID}
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+    validate:
+    - eq: [ status_code, 200 ]
+    - str_eq: [ '$.route_finding.trip_d', '${DispatchID}']
+    - str_eq: [ '$.route_finding.distance_result.order_id', '${Order_id}']
+
+test_order_status3:
+  name: check order_status
+  request:
+    method: POST
+    url: /write/get_load_tms_orderv2.php
+    verify: False
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      input_order_id: ${str(Order_id)}
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  validate:
+  - eq: [status_code, 200]
+  - eq: ['$.order.order_table[0].tms_order_status', '2']
+
+test_get_terminal1:
+  name: get current terminal
+  request:
+    method: POST
+    url: /write/get_order_current_trip.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      order_id: ${str(Order_id)}
+      UserToken: ${UserToken}
+      CompanyID: '23'
+      GroupID: '28'
+      UserID: ${str(UserID)}
+  extract:
+    terminal_id: $.terminal_id
+  validate:
+    - eq: [ status_code, 200 ]
+    - str_eq: [ $.order_id, '${Order_id}']
+
+test_offload1:
+  name: offload
+  request:
+    method: POST
+    url: /write/offload_order.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      order_id: ${str(Order_id)}
+      terminal_id: '${terminal_id}'
+      trip_id: '${DispatchID}'
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  validate:
+    - eq: [ status_code, 200 ]
+    - eq: [ $.status, 1 ]
+    - eq: [ $.data.gate_check_line_type, off_load ]
+
+test_check_linehaul_task:
+  name: check linehaul task
+  request:
+    method: POST
+    url: /write/check_tms_lh_tasks.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      search_term: '["${Pro_id}"]'
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  validate:
+    - eq: [ status_code, 200 ]
+    - len_eq: [ $.success, 1 ]
+
+test_create_linehaul:
+  name: create linehaul
+  request:
+    method: POST
+    url: /write/write_tms_lh2.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      input_lh: 0
+      input_warehouse1: '347975'
+      input_warehouse2: '1871277'
+      lh_lines: '[{"pro":"${Pro_id}","task_id":"0","order_id":"${Order_id}","input_order_id":"${Order_id}"}]'
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  extract:
+    linehaul_id: '$.lh_id'
+  validate:
+    - eq: [ status_code, 200 ]
+
+test_get_linehaul:
+  name: get linehaul
+  request:
+    method: POST
+    url: /write/get_tms_dispatch_lh.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      input_lh_delivery: '${linehaul_id}'
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  validate:
+    - eq: [ status_code, 200 ]
+    - str_eq: [ '$.[0].id', '${linehaul_id}' ]
+
+test_create_linehaul_trip:
+  name: create linehaul trip
+  request:
+    method: POST
+    url: /write/write_tms_dispatch7.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      input_driver_id: '5506'
+      input_dispatch_start_date: '2023-09-25'
+      input_carrier_id: '0'
+      selected_carrier_id: '0'
+      input_carrier_driver_id: '0'
+      is_carrier_driver_id: '0'
+      input_carrier_driver_parent_carrier_id: '0'
+      input_warehouse_id: '1871277'
+      input_warehouse_id2: '0'
+      input_lock_sequence: '1'
+      input_dispatch_end_trip: '0'
+      input_dispatch_type: '0'
+      input_dispatch_service_level: None
+      dispatch_lines: '[{"input_id":"${linehaul_id}","input_id2":"${linehaul_id}","stage":"1","task_id":"0","rv_order":"0","rv_import":"0","lat":"0","lng":"0"}]'
+      input_dispatch_id: '0'
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  extract:
+    linehaul_trip_id: $.dispatch_id
+  validate:
+    - eq: [ status_code, 200 ]
+    - eq: [ length(body.stops), 1 ]
+
+test_get_linehaul_trip_task:
+  name: get linehaul trip task
+  request:
+    method: POST
+    url: /write/get_dispatch_tms.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      dispatch_id: '${linehaul_trip_id}'
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  extract:
+    linehaul_task_group_id: '$.tasks[0].task_group_id'
+  validate:
+    - eq: [ status_code, 200 ]
+    - eq: [ '$.tms_dispatch_id', '${linehaul_trip_id}' ]
+
+test_check_in_linehaul_task:
+  name: check in linehaul task
+  request:
+    method: POST
+    url: /write/write_tms_check_in_task_group_v4.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      task_group_id: '${linehaul_task_group_id}'
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  validate:
+    - eq: [ status_code, 200 ]
+    - eq: [ body, 1 ]
+
+test_complete_linehaul_trip:
+  name: complete linehaul trip
+  request:
+    method: POST
+    url: /write/write_tms_dispatch_complete.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      dispatch_id: '${linehaul_trip_id}'
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  validate:
+    - eq: [ status_code, 200 ]
+    - str_eq: [ '$.route_finding.trip_d', '${linehaul_trip_id}']
+
+test_get_terminal2:
+  name: get current terminal2
+  request:
+    method: POST
+    url: /write/get_order_current_trip.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      order_id: ${str(Order_id)}
+      UserToken: ${UserToken}
+      CompanyID: '23'
+      GroupID: '28'
+      UserID: ${str(UserID)}
+  extract:
+    deliver_terminal_id: $.terminal_id
+  validate:
+    - eq: [ status_code, 200 ]
+    - str_eq: [ $.order_id, '${Order_id}']
+
+test_offload2:
+  name: offload2
+  request:
+    method: POST
+    url: /write/offload_order.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      order_id: ${str(Order_id)}
+      terminal_id: '${deliver_terminal_id}'
+      trip_id: '${linehaul_trip_id}'
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  validate:
+    - eq: [ status_code, 200 ]
+    - eq: [ $.status, 1 ]
+    - eq: [ $.data.gate_check_line_type, off_load ]
+
+test_get_order_dispatch:
+  name: get order dispatch to delivery
+  request:
+    method: POST
+    url: /write/get_tms_order_dispatch.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      input_id: ${Pro_id}
+      service_type: '2'
+      pu: '0'
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  validate:
+    - eq: [ status_code, 200 ]
+    - str_eq: [ $.order.input_id, '${Order_id}' ]
+
+test_create_deliver_trip:
+  name: create delivery trip
+  request:
+    method: POST
+    url: /write/write_tms_dispatch7.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      input_driver_id: '5506'
+      input_dispatch_start_date: '2023-09-25'
+      input_carrier_id: '0'
+      selected_carrier_id: '0'
+      input_carrier_driver_id: '0'
+      is_carrier_driver_id: '0'
+      input_carrier_driver_parent_carrier_id: '0'
+      input_warehouse_id: '1871277'
+      input_warehouse_id2: '0'
+      input_lock_sequence: '1'
+      input_dispatch_end_trip: '0'
+      input_dispatch_type: '0'
+      input_dispatch_service_level: None
+      dispatch_lines: '[ { "input_id": "${Order_id}","input_id2": "${Pro_id}","stage": "2","task_id": "0","rv_order": "0","rv_import": "0","lat": "37.693436","lng": "-122.084389" } ]'
+      input_dispatch_id: '0'
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  extract:
+    deliver_trip_id: $.dispatch_id
+  validate:
+    - eq: [ status_code, 200 ]
+    - eq: [ length(body.stops), 1 ]
+
+test_deliver_trip_get_task:
+
+  request:
+    method: POST
+    url: /write/get_dispatch_tms.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      dispatch_id: ${deliver_trip_id}
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  extract:
+    deliver_task_group_id: '$.tasks[0].task_group_id'
+  validate:
+  - eq: [status_code, 200]
+  - eq: ['$.tms_dispatch_id', '${deliver_trip_id}']
+
+test_check_in_deliver_task:
+
+  name: check in deliver task
+  request:
+    method: POST
+    url: /write/write_tms_check_in_task_group_v4.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      task_group_id: ${deliver_task_group_id}
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  validate:
+    - eq: [ status_code, 200 ]
+    - eq: [ body, 1 ]
+
+test_complete_deliver_trip:
+  name: complete trip
+  request:
+    method: POST
+    url: /write/write_tms_dispatch_complete.php
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      dispatch_id: ${deliver_trip_id}
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  validate:
+  - eq: [ status_code, 200 ]
+  - str_eq: [ '$.route_finding.trip_d', '${deliver_trip_id}']
+  - str_eq: [ '$.route_finding.distance_result.order_id', '${Order_id}']
+
+test_check_order5:
+  name: check order, 检查order_status
+  request:
+    method: POST
+    url: /write/get_load_tms_orderv2.php
+    verify: False
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    data:
+      input_order_id: ${str(Order_id)}
+      UserID: ${str(UserID)}
+      UserToken: ${UserToken}
+  validate:
+  - eq: [status_code, 200]
+  - eq: ['$.order.order_table[0].tms_order_stage', '5']
