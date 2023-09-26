@@ -139,10 +139,10 @@ test_complete_trip:
       dispatch_id: ${DispatchID}
       UserID: ${str(UserID)}
       UserToken: ${UserToken}
-    validate:
-    - eq: [ status_code, 200 ]
-    - str_eq: [ '$.route_finding.trip_d', '${DispatchID}']
-    - str_eq: [ '$.route_finding.distance_result.order_id', '${Order_id}']
+  validate:
+  - eq: [ status_code, 200 ]
+  - str_eq: [ '$.route_finding.trip_d', '${DispatchID}']
+  - str_eq: [ '$.route_finding.distance_result.order_id', '${Order_id}']
 
 test_order_status3:
   name: check order_status
